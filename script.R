@@ -6,6 +6,12 @@ library(readxl)
 library(randomForest)
 library(zoo)
 library(ggplot2)
+library(leaps)
+library(corrplot)
+library(forecast)
+library(tseries)
+library(psych)
+library(patchwork)
 
 
 
@@ -79,11 +85,170 @@ data_test <- data_infl[156:167,] # 2023
 
 
 
-#----- 2. MÉTHODE 1 : RANDOM FOREST "CLASSIQUE" ----------
+#----- 2. STATISTIQUES DESCRIPTIVES ----------
 
-#----- 2.1. Entraîner le modèle -----
+#----- 2.1. Déterminer les statistiques univariées -----
 
-#----- 2.1.1. Entraîner ---
+#----- 2.1.1. Numériques ---
+
+stat_num <- function(data) {
+  num_vars <- names(data)[sapply(data, is.numeric)]
+  
+  stats_list <- lapply(num_vars, function(var) {
+    x <- data[[var]]
+    qnt <- quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+    iqr <- qnt[2] - qnt[1]
+    outliers <- sum(x < (qnt[1] - 1.5 * iqr) | x > (qnt[2] + 1.5 * iqr), na.rm = TRUE)
+    
+    descr <- psych::describe(x)
+    
+    return(data.frame(
+      variable = var,
+      moyenne = descr$mean,
+      mediane = descr$median,
+      ecart_type = descr$sd,
+      min = descr$min,
+      q25 = qnt[1],
+      q75 = qnt[2],
+      max = descr$max,
+      skewness = descr$skew,
+      kurtosis = descr$kurtosis,
+      nb_na = sum(is.na(x)),
+      nb_outliers = outliers
+    ))
+  })
+  
+  stats_df <- do.call(rbind, stats_list)
+  rownames(stats_df) <- NULL
+  return(stats_df)
+}
+
+
+stat_num(data_infl)
+stat_num(data_train)
+stat_num(data_test)
+
+
+
+#----- 2.1.2. Graphiques ---
+
+stat_graph <- function(data, dataset_name = "Dataset") {
+  
+  num_vars <- names(data)[sapply(data, is.numeric)]
+  
+  par(mfrow = c(2, 2))
+  
+  # Afficher tous les histogrammes
+  for (var in num_vars) {
+    hist(data[[var]], 
+         main = paste0("Histogramme de ", var, " (", dataset_name, ")"), 
+         xlab = var, 
+         col = "lightblue", 
+         border = "black")
+  }
+  
+  
+  # Afficher le barplot
+  
+  barplot(table(data$saison),
+          main = paste0("Barplot de saison (", dataset_name, ")"),
+          col = "lightgreen",
+          border = "black",
+          xlab = "Saison",
+          ylab = "Fréquence")
+  
+  par(mfrow = c(1, 1))
+  par(mfrow = c(2, 2))
+  
+  
+  # Afficher tous les boxplots
+  
+  for (var in num_vars) {
+    boxplot(data[[var]], 
+            main = paste0("Boxplot de ", var, " (", dataset_name, ")"), 
+            ylab = var, 
+            col = "skyblue", 
+            border = "black")
+  }
+  
+  par(mfrow = c(1, 1))
+  
+}
+
+
+
+stat_graph(data_infl, "data_infl")
+stat_graph(data_train, "data_train")
+stat_graph(data_test, "data_test")
+
+
+
+
+
+#----- 2.2. Statistiques bivariées -----
+
+#----- 2.2.1. Quantitatif - Quantitatif ---
+
+# Calculer la matrice
+
+corr_matrix <- data_infl[ , !(names(data_infl) %in% c("date", "saison"))] |> 
+  cor(, use = "complete.obs")
+
+
+# Représenter
+
+corrplot(corr_matrix, 
+         method = "circle",
+         type = "upper",
+         col = colorRampPalette(c("red", "white", "blue"))(200),
+         tl.col = "black",
+         tl.srt = 45,
+         addCoef.col = "black",
+         number.cex = 0.8)
+
+
+
+#----- 2.2.2. Quantitatif - Qualitatif ---
+
+plot_violin_horizontal <- function(data, dataset_name = "Dataset") {
+  
+  # Sélection des variables numériques
+  
+  num_vars <- names(data)[sapply(data, is.numeric)]
+  
+  
+  # Boucle sur chaque variable quantitative
+  
+  for (var in num_vars) {
+    p <- ggplot(data, aes(x = .data[[var]], y = saison)) +
+      geom_violin(fill = "lightblue", color = NA, alpha = 0.6, trim = FALSE) +
+      geom_boxplot(width = 0.1, fill = "darkblue", color = "black", alpha = 0.5, outlier.shape = NA) +
+      geom_jitter(height = 0.1, color = "black", alpha = 0.3, size = 1) +
+      labs(
+        title = paste0("Distribution de ", var, " par saison (", dataset_name, ")"),
+        x = var,
+        y = "Saison"
+      ) +
+      theme_minimal()
+    
+    print(p)
+  }
+}
+
+
+
+
+
+
+
+
+
+
+#----- 3. MÉTHODE 1 : RANDOM FOREST "CLASSIQUE" ----------
+
+#----- 3.1. Entraîner le modèle -----
+
+#----- 3.1.1. Entraîner ---
 
 set.seed(123)
 
@@ -91,9 +256,10 @@ model_rf_class <- randomForest(infl_energie ~ . - date,
                                data = data_train, 
                                importance = TRUE) # connaître l'importance de chaque variable
 
+# changer nodesize ne change pas grand chose dans les résultats
 
 
-#----- 2.1.2. Visualiser l'importance des variables ---
+#----- 3.1.2. Visualiser l'importance des variables ---
 
 # Numérique
 
@@ -108,15 +274,15 @@ varImpPlot(model_rf_class)
 
 
 
-#----- 2.2. Prédire avec le modèle -----
+#----- 3.2. Prédire avec le modèle -----
 
-#----- 2.2.1. Prédire sur les données de test (2023) ---
+#----- 3.2.1. Prédire sur les données de test (2023) ---
 
 pred_rf_class <- predict(model_rf_class, newdata = data_test)
 
 
 
-#----- 2.2.2. Comparer les valeurs prédites et réelles ---
+#----- 3.2.2. Comparer les valeurs prédites et réelles ---
 
 # Numérique
 
@@ -144,7 +310,7 @@ ggplot(result_rf_class, aes(x = date)) +
 
 
 
-#----- 2.3. Évaluer le modèle ----------
+#----- 3.3. Évaluer le modèle ----------
 
 # Calculer l'erreur quadratique moyenne
 
@@ -166,17 +332,17 @@ rmse_rf_class
 
 
 
-#----- 3. MÉTHODE 2 : RANDOM FOREST "PONDÉRÉ" ----------
+#----- 4. MÉTHODE 2 : RANDOM FOREST "PONDÉRÉ" ----------
 
-#----- 3.1. Entraîner le modèle -----
+#----- 4.1. Entraîner le modèle -----
 
-#----- 3.1.1. Définir les poids ---
+#----- 4.1.1. Définir les poids ---
 
 poids <- exp(-(as.numeric(data_train$date) - max(as.numeric(data_train$date))) / 365)  # Exponentiellement dégressif
 
 
 
-#----- 3.1.2. Entraîner ---
+#----- 4.1.2. Entraîner ---
 
 set.seed(123)
 
@@ -187,7 +353,7 @@ model_rf_pond <- randomForest(infl_energie ~ . - date,
 
 
 
-#----- 3.1.3. Visualiser l'importance des variables ---
+#----- 4.1.3. Visualiser l'importance des variables ---
 
 # Numérique
 
@@ -202,15 +368,15 @@ varImpPlot(model_rf_pond)
 
 
 
-#----- 3.2. Prédire avec le modèle -----
+#----- 4.2. Prédire avec le modèle -----
 
-#----- 3.2.1. Prédire sur les données de test (2023) ---
+#----- 4.2.1. Prédire sur les données de test (2023) ---
 
 pred_rf_pond <- predict(model_rf_pond, newdata = data_test)
 
 
 
-#----- 3.2.2. Comparer les valeurs prédites et réelles ---
+#----- 4.2.2. Comparer les valeurs prédites et réelles ---
 
 # Numérique
 
@@ -239,7 +405,7 @@ ggplot(result_rf_pond, aes(x = date)) +
 
 
 
-#----- 3.3. Évaluer le modèle ----------
+#----- 4.3. Évaluer le modèle ----------
 
 # Calculer l'erreur quadratique moyenne
 
@@ -262,9 +428,9 @@ rmse_rf_pond
 
 
 
-#----- 4. MÉTHODE 3 : RANDOM FOREST "ROLLING WINDOW vraies valeurs" ----------
+#----- 5. MÉTHODE 3 : RANDOM FOREST "ROLLING WINDOW vraies valeurs" ----------
 
-#----- 4.1. Définir les paramètres -----
+#----- 5.1. Définir les paramètres -----
 
 fenetre <- 155  # Taille de la fenêtre (2010-2022)
 
@@ -274,7 +440,7 @@ data_train_roll <- data_train[(155 - fenetre + 1):155, ]
 
 
 
-#----- 4.2. Réaliser la boucle ---
+#----- 5.2. Réaliser la boucle ---
 
 for (i in 1:12) {
   
@@ -324,7 +490,7 @@ for (i in 1:12) {
 
 
 
-#----- 4.3. Comparer les valeurs prédites et réelles -----
+#----- 5.3. Comparer les valeurs prédites et réelles -----
 
 # Numérique
 
@@ -346,7 +512,9 @@ ggplot(result_rf_roll_reel, aes(x = date)) +
 
 
 
-#----- 4.4. Évaluer le modèle ----------
+
+
+#----- 5.4. Évaluer le modèle ----------
 
 # Calculer l'erreur quadratique moyenne
 
@@ -368,9 +536,9 @@ rmse_rf_roll
 
 
 
-#----- 5. MÉTHODE 4 : RANDOM FOREST "ROLLING WINDOW valeurs prédites" ----------
+#----- 6. MÉTHODE 4 : RANDOM FOREST "ROLLING WINDOW valeurs prédites" ----------
 
-#----- 5.1. Définir les paramètres -----
+#----- 6.1. Définir les paramètres -----
 
 fenetre <- 130  # Taille de la fenêtre (2010-2022)
 
@@ -380,7 +548,7 @@ data_train_roll <- data_train[(155 - fenetre + 1):155, ]
 
 
 
-#----- 5.2. Réaliser la boucle ---
+#----- 6.2. Réaliser la boucle ---
 
 for (i in 1:12) {
   
@@ -431,7 +599,7 @@ for (i in 1:12) {
 
 
 
-#----- 5.3. Comparer les valeurs prédites et réelles -----
+#----- 6.3. Comparer les valeurs prédites et réelles -----
 
 # Numérique
 
@@ -453,7 +621,9 @@ ggplot(result_rf_roll_pred, aes(x = date)) +
 
 
 
-#----- 5.4. Évaluer le modèle ----------
+
+
+#----- 6.4. Évaluer le modèle ----------
 
 # Calculer l'erreur quadratique moyenne
 
@@ -465,3 +635,270 @@ mse_rf_roll
 
 rmse_rf_roll <- sqrt(mse_rf_roll)
 rmse_rf_roll
+
+
+
+
+
+
+
+
+
+
+#----- 7. MÉTHODE 5 : Régression linéaire multiple  ----------
+
+#----- 7.1. Sélectionner les variables ---
+
+# Appliquer la méthode best subset
+
+model_bestsub <- regsubsets(infl_energie ~ . - date, data = data_train, nvmax = ncol(data_train) - 1)
+
+summary_best <- summary(model_bestsub)
+
+
+# Afficher les R² ajustés
+
+summary_best$adjr2
+
+
+# Sélectionner les variables d'après le R² ajusté
+
+nb_variables_opt <- which.max(summary_best$adjr2)
+
+variables_selectionnees <- names(coef(model_bestsub, nb_variables_opt))[-1]  # enlever l'intercept
+variables_selectionnees
+
+
+# Remplacer "saisonete", "saisonhiver" et "saisonprintemps" par "saison"
+
+variables_selectionnees <- variables_selectionnees[!variables_selectionnees %in% c("saisonete", "saisonhiver", "saisonprintemps")]
+
+variables_selectionnees <- unique(c(variables_selectionnees, "saison"))
+
+
+
+#----- 7.2. Entraîner le modèle ---
+
+# Définir la formule
+
+formule <- as.formula(paste("infl_energie ~", paste(variables_selectionnees, collapse = " + ")))
+
+
+# Entraîner le modèle linéaire
+
+model_lm <- lm(formule, data = data_train)
+
+
+# Résumé
+
+summary(model_lm)
+
+
+
+
+
+#----- 7.3. Prédire avec le modèle -----
+
+pred_lm <- predict(model_lm, newdata = data_test)
+
+
+
+
+
+#----- 7.4. Comparer les valeurs prédites et réelles ---
+
+# Numérique
+
+result_lm <- data.frame(
+  date = data_test$date,
+  infl_reelle = data_test$infl_energie,
+  infl_predite = pred_lm
+)
+
+print(result_lm)
+
+
+# Graphique
+
+ggplot(result_lm, aes(x = date)) +
+  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1) +
+  geom_line(aes(y = infl_predite, color = "Prédictions LM"), size = 1, linetype = "dashed") +
+  scale_color_manual(values = c("Inflation réelle" = "blue", "Prédictions LM" = "red")) +
+  labs(title = "Comparaison des valeurs réelles et prédites (modèle linéaire)", 
+       x = "Date", y = "Inflation", color = "Légende") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+#----- 7.5. Évaluer le modèle ----------
+
+# Calculer l'erreur quadratique moyenne
+
+mse_lm <- mean((result_lm$infl_predite - result_lm$infl_reelle)^2)
+mse_lm
+
+
+# Calculer le RMSE
+
+rmse_lm <- sqrt(mse_lm)
+rmse_lm
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#----- 8. MÉTHODE 6 : FORECAST  ----------
+
+#----- 7.1. Convertir les données en série temporelle -----
+
+data_train_ts <- ts(data_train$infl_energie, start = c(2010, 01), frequency = 12)
+
+
+
+
+
+#----- 8.2. Retirer les outliers -----
+
+# Recherche et correction 1 : 5 outliers
+
+ts_outliers_1 <- tso(data_train_ts, maxit.iloop = 20)
+ts_outliers_1
+
+plot(ts_outliers_1)
+
+data_train_ts_corr_1 <- ts_outliers_1$yadj
+
+
+# Recherche et correction 2 : 4 outliers
+
+ts_outliers_2 <- tso(data_train_ts_corr_1, maxit.iloop = 20)
+ts_outliers_2
+
+plot(ts_outliers_2)
+
+data_train_ts_corr_2 <- ts_outliers_2$yadj
+
+# Recherche et correction 3 : 2 outliers
+
+ts_outliers_3 <- tso(data_train_ts_corr_2, maxit.iloop = 20)
+ts_outliers_3
+
+plot(ts_outliers_3)
+
+data_train_ts_corr_3 <- ts_outliers_3$yadj
+
+
+# Recherche 4 : 0 outlier
+
+tso(data_train_ts_corr_3, maxit.iloop = 20)
+
+
+
+#----- 8.3. Vérifier la stationnarité -----
+
+# Test Dickey-Fuller
+
+adf.test(data_train_ts_corr_3)  # p-value < 0.01 -> on rejette H0, la série est stationnaire
+
+
+# Test KPSS
+
+kpss.test(data_train_ts_corr_3) # p-value > 0.1 -> on accepte H0, la série est stationnaire
+
+
+
+
+
+#----- 8.4. Entraîner le modèle ARIMA -----
+
+
+# Entraîner le modèle ARIMA
+
+model_arima <- auto.arima(data_train_ts_corr_3)
+
+
+# Résumé du modèle ARIMA
+
+summary(model_arima)
+
+
+
+
+
+#----- 8.5. Prédire avec le modèle ----------
+
+#----- 8.5.1. Prédire sur les données de test (2023) -----
+
+# Prédictions pour les 12 prochains mois avec ARIMA
+
+forecast_arima <- forecast(model_arima, h = 12)
+
+
+
+#----- 8.5.2. Comparer les valeurs prédites et réelles ----------
+
+# Comparer les valeurs réelles et les prévisions
+
+result_forecast <- data.frame(
+  date = data_test$date,
+  infl_reelle = data_test$infl_energie,
+  infl_predite = forecast_arima$mean
+)
+
+
+# Affichage des résultats
+
+print(result_forecast)
+
+
+
+
+
+#----- 8.6. Visualiser les résultats ----------
+
+
+ggplot(result_forecast, aes(x = date)) +
+  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1) +
+  geom_line(aes(y = infl_predite, color = "Prédictions ARIMA"), size = 1, linetype = "dashed") +
+  scale_color_manual(values = c("Inflation réelle" = "blue", 
+                                "Prédictions ARIMA" = "red")) +
+  labs(title = "Comparaison des valeurs réelles et prédites de l'inflation", 
+       x = "Date", 
+       y = "Inflation", 
+       color = "Légende") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+#----- 8.7. Évaluer les modèles ----------
+
+# Calculer l'erreur quadratique moyenne
+
+mse_arima <- mean((result_forecast$infl_predite - result_forecast$infl_reelle)^2)
+mse_arima
+
+
+# Calculer le RMSE
+
+rmse_arima <- sqrt(mse_arima)
+rmse_arima
+
+
+
+
