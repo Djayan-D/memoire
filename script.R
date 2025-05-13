@@ -12,7 +12,8 @@ library(forecast)
 library(tseries)
 library(psych)
 library(patchwork)
-
+library(dtw)
+library(dplyr)
 
 
 
@@ -295,22 +296,32 @@ print(result_rf_class)
 
 # Graphique
 
-ggplot(result_rf_class, aes(x = date)) +
-  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1) +  # Courbe des données réelles
-  geom_line(aes(y = infl_predite, color = "Prédictions RF"), size = 1, linetype = "dashed") +  # Courbe des prédictions
-  scale_color_manual(values = c("Inflation réelle" = "blue", "Prédictions RF" = "red")) +
-  labs(title = "Comparaison des valeurs réelles et prédites de l'inflation", 
-       x = "Date", 
-       y = "Inflation", 
-       color = "Légende") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+#----- FONCTION 1 : Tracer le graphique inflation réelle vs prédite -----
+
+plot_result <- function(resultats, nom_methode = deparse(substitute(resultats))) {
+  
+  ggplot(resultats, aes(x = date)) +
+    geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1) +
+    geom_line(aes(y = infl_predite, color = "Inflation prédite"), 
+              size = 1, linetype = "dashed") +
+    scale_color_manual(values = c("Inflation réelle" = "blue", "Inflation prédite" = "red")) +
+    labs(title = "Comparaison des valeurs réelles et prédites de l'inflation",
+         subtitle = paste("Méthode :", nom_methode),
+         x = "Date", 
+         y = "Inflation", 
+         color = "Légende") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+#----- FIN FONCTION 1 -----
+
+plot_result(result_rf_class, "Random Forest Classique")
 
 
 
 
-
-#----- 3.3. Évaluer le modèle ----------
+#----- 3.3. Évaluer le modèle -----
 
 # Calculer l'erreur quadratique moyenne
 
@@ -322,6 +333,86 @@ mse_rf_class
 
 rmse_rf_class <- sqrt(mse_rf_class)
 rmse_rf_class
+
+
+
+#----- 3.4. Voir la variabilité des prédicitons -----
+
+# Paramètres
+
+nb_simulation <- 100
+liste_pred_rf_class <- list()
+
+
+# Simuler et prédire
+
+for (i in 1:nb_simulation) {
+  set.seed(100 + i)
+  model <- randomForest(infl_energie ~ . - date, data = data_train)
+  pred <- predict(model, newdata = data_test)
+  
+  liste_pred_rf_class[[i]] <- data.frame(
+    date = data_test$date,
+    pred = pred,
+    iteration = paste0("RF_", i)
+  )
+}
+
+
+# Fusionner dans un seul data frame
+
+pred_rf_class_multi <- bind_rows(liste_pred_rf_class)
+
+
+# Représenter les simulation, la seed 123 et les valeurs réelles sur une seul graphique
+
+#----- FONCTION 2 : Voir la variabilité des prédictions -----
+
+plot_result_var <- function(diminutif_methode, nom_methode = diminutif_methode) {
+  
+  # Construire les noms pour récupérer les dataframes
+  nom_multi <- paste0("pred_", diminutif_methode, "_multi")
+  nom_result <- paste0("result_", diminutif_methode)
+  
+  # Récupérer les dataframes depuis l'environnement global
+  df_multi <- get(nom_multi, envir = .GlobalEnv)
+  df_result <- get(nom_result, envir = .GlobalEnv)
+  
+  # Construire le graphique
+  ggplot() +
+    # Prévisions multiples
+    geom_line(data = df_multi, aes(x = date, y = pred, group = iteration, color = "Prévisions multiples (seeds aléatoires)"), 
+              alpha = 0.3, size = 0.8) +
+    
+    # Prévision principale
+    geom_line(data = df_result, aes(x = date, y = infl_predite, color = "Prévision principale (seed = 123)"), 
+              size = 1.2) +
+    
+    # Série réelle
+    geom_line(data = df_result, aes(x = date, y = infl_reelle, color = "Inflation réelle"), 
+              size = 1.2) +
+    
+    scale_color_manual(values = c(
+      "Prévisions multiples (seeds aléatoires)" = "#ffb8b8",
+      "Prévision principale (seed = 123)" = "red",
+      "Inflation réelle" = "blue"
+    )) +
+    
+    labs(
+      title = "Variabilité des prévisions",
+      subtitle = paste("Méthode :", nom_methode, 
+                       "\nNombre de séries supplémentaires simulées :", nrow(df_multi)/12 ),
+      x = "Date", y = "Inflation prédite",
+      color = "Légende"
+    ) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+#----- FIN FONCTION 2 -----
+
+plot_result_var("rf_class", "Random Forest Classique")
+
 
 
 
@@ -390,16 +481,7 @@ print(result_rf_pond)
 
 # Graphique
 
-ggplot(result_rf_pond, aes(x = date)) +
-  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1) +  # Courbe des données réelles
-  geom_line(aes(y = infl_predite, color = "Prédictions RF"), size = 1, linetype = "dashed") +  # Courbe des prédictions
-  scale_color_manual(values = c("Inflation réelle" = "blue", "Prédictions RF" = "red")) +
-  labs(title = "Comparaison des valeurs réelles et prédites de l'inflation", 
-       x = "Date", 
-       y = "Inflation", 
-       color = "Légende") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+plot_result(result_rf_pond, "Random Forest Pondéré")
 
 
 
@@ -418,6 +500,44 @@ mse_rf_pond
 
 rmse_rf_pond <- sqrt(mse_rf_pond)
 rmse_rf_pond
+
+
+
+#----- 4.4. Voir la variabilité des prédicitons -----
+
+# Paramètres
+
+nb_simulation <- 100
+liste_pred_rf_pond <- list()
+
+
+# Simuler et prédire
+
+for (i in 1:nb_simulation) {
+  set.seed(100 + i)
+  model <- randomForest(infl_energie ~ . - date, 
+                        data = data_train,
+                        weights = poids,
+                        importance = TRUE)
+  
+  pred <- predict(model, newdata = data_test)
+  
+  liste_pred_rf_pond[[i]] <- data.frame(
+    date = data_test$date,
+    pred = pred,
+    iteration = paste0("RF_pond_", i)
+  )
+}
+
+
+# Fusionner dans un seul data frame
+
+pred_rf_pond_multi <- bind_rows(liste_pred_rf_pond)
+
+
+# Représenter les simulation, la seed 123 et les valeurs réelles sur une seul graphique
+
+plot_result_var("rf_pond", "Random Forest Pondéré")
 
 
 
@@ -459,7 +579,7 @@ for (i in 1:12) {
   
   # Prédire
   
-  pred_rf_roll <- predict(model_rf_roll, newdata = data_test_roll)
+  pred_rf_roll_reel <- predict(model_rf_roll, newdata = data_test_roll)
   
   
   # Sauvegarder le résultat
@@ -467,7 +587,7 @@ for (i in 1:12) {
   result_rf_roll_reel <- rbind(result_rf_roll_reel, 
                           data.frame(date = data_test_roll$date,
                                      infl_reelle = data_test_roll$infl_energie,
-                                     infl_predite = pred_rf_roll,
+                                     infl_predite = pred_rf_roll_reel,
                                      stringsAsFactors = FALSE))
   
   
@@ -499,16 +619,7 @@ print(result_rf_roll_reel)
 
 # Graphique
 
-ggplot(result_rf_roll_reel, aes(x = date)) +
-  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1) +  # Courbe des données réelles
-  geom_line(aes(y = infl_predite, color = "Prédictions RF"), size = 1, linetype = "dashed") +  # Courbe des prédictions
-  scale_color_manual(values = c("Inflation réelle" = "blue", "Prédictions RF" = "red")) +
-  labs(title = "Comparaison des valeurs réelles et prédites de l'inflation", 
-       x = "Date", 
-       y = "Inflation", 
-       color = "Légende") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+plot_result(result_rf_roll_reel, "Random Forest Rolling Window avec valeurs réelles")
 
 
 
@@ -518,14 +629,101 @@ ggplot(result_rf_roll_reel, aes(x = date)) +
 
 # Calculer l'erreur quadratique moyenne
 
-mse_rf_roll <- mean((result_rf_roll_reel$infl_predite - result_rf_roll_reel$infl_reelle)^2)
-mse_rf_roll
+mse_rf_roll_reel <- mean((result_rf_roll_reel$infl_predite - result_rf_roll_reel$infl_reelle)^2)
+mse_rf_roll_reel
 
 
 # Calculer le RMSE
 
-rmse_rf_roll <- sqrt(mse_rf_roll)
-rmse_rf_roll
+rmse_rf_roll_reel <- sqrt(mse_rf_roll_reel)
+rmse_rf_roll_reel
+
+
+
+
+
+#----- 5.5. Voir la variabilité des prédicitons -----
+
+# Paramètres
+
+nb_simulation <- 100
+liste_pred_rf_roll_reel <- list()
+
+
+# Boucle sur les simulations
+
+for (i in 1:nb_simulation) {
+  
+  set.seed(100 + i)
+  
+  # Réinitialiser les données d'entraînement
+  data_train_roll_sim <- data_train[(155 - fenetre + 1):155, ]
+  
+  # Pour stocker les prédictions de cette simulation
+  pred_sim <- data.frame()
+  
+  # Rolling sur les 12 mois
+  for (j in 1:12) {
+    
+    data_test_roll <- data_test[j, , drop = FALSE]
+    
+    # Modèle
+    model_rf_roll_sim <- randomForest(infl_energie ~ . - date, 
+                                      data = data_train_roll_sim)
+    
+    # Prédiction
+    pred_j <- predict(model_rf_roll_sim, newdata = data_test_roll)
+    
+    # Stocker la prédiction
+    pred_sim <- rbind(pred_sim, data.frame(
+      date = data_test_roll$date,
+      pred = pred_j,
+      iteration = paste0("RF_roll_", i)
+    ))
+    
+    # Mise à jour de la fenêtre
+    data_train_roll_sim <- rbind(data_train_roll_sim, data_test_roll)
+    
+    if (nrow(data_train_roll_sim) > fenetre) {
+      data_train_roll_sim <- tail(data_train_roll_sim, fenetre)
+    }
+    
+    # Progression 2
+    if (j != 12) {print(paste0(i-1, ".", sprintf("%02d", floor(100/12*j)), " %"))}
+    else {print(paste0(i, ".00 %"))}
+  }
+  
+  # Ajouter les 12 prédictions de cette simulation à la liste
+  liste_pred_rf_roll_reel[[i]] <- pred_sim
+}
+
+
+# Fusionner dans un seul data frame
+
+pred_rf_roll_reel_multi <- bind_rows(liste_pred_rf_roll_reel)
+
+
+# Représenter les simulation, la seed 123 et les valeurs réelles sur une seul graphique
+
+plot_result_var("rf_roll_reel", "Random Forest Rolling Window avec valeurs réelles")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -567,7 +765,7 @@ for (i in 1:12) {
   
   # Prédire
   
-  pred_rf_roll <- predict(model_rf_roll, newdata = data_test_roll)
+  pred_rf_roll_pred <- predict(model_rf_roll, newdata = data_test_roll)
   
   
   # Sauvegarder le résultat
@@ -575,14 +773,14 @@ for (i in 1:12) {
   result_rf_roll_pred <- rbind(result_rf_roll_pred, 
                                data.frame(date = data_test_roll$date,
                                           infl_reelle = data_test_roll$infl_energie,
-                                          infl_predite = pred_rf_roll,
+                                          infl_predite = pred_rf_roll_pred,
                                           stringsAsFactors = FALSE))
   
   
   # Construire une nouvelle observation à ajouter à l'entraînement
   
   new_row <- data_test_roll
-  new_row$infl_energie <- pred_rf_roll # On ajoute la valeur prédite (remplacer la colonne infl_energie par la prédite)
+  new_row$infl_energie <- pred_rf_roll_pred # On ajoute la valeur prédite (remplacer la colonne infl_energie par la prédite)
   
   
   # Ajouter la nouvelle observation dans la fenêtre d'entraînement
@@ -608,16 +806,7 @@ print(result_rf_roll_pred)
 
 # Graphique
 
-ggplot(result_rf_roll_pred, aes(x = date)) +
-  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1) +  # Courbe des données réelles
-  geom_line(aes(y = infl_predite, color = "Prédictions RF"), size = 1, linetype = "dashed") +  # Courbe des prédictions
-  scale_color_manual(values = c("Inflation réelle" = "blue", "Prédictions RF" = "red")) +
-  labs(title = "Comparaison des valeurs réelles et prédites de l'inflation", 
-       x = "Date", 
-       y = "Inflation", 
-       color = "Légende") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+plot_result(result_rf_roll_pred, "Random Forest Rolling Window avec valeurs prédites")
 
 
 
@@ -627,14 +816,87 @@ ggplot(result_rf_roll_pred, aes(x = date)) +
 
 # Calculer l'erreur quadratique moyenne
 
-mse_rf_roll <- mean((result_rf_roll_pred$infl_predite - result_rf_roll_pred$infl_reelle)^2)
-mse_rf_roll
+mse_rf_roll_pred <- mean((result_rf_roll_pred$infl_predite - result_rf_roll_pred$infl_reelle)^2)
+mse_rf_roll_pred
 
 
 # Calculer le RMSE
 
-rmse_rf_roll <- sqrt(mse_rf_roll)
-rmse_rf_roll
+rmse_rf_roll_pred <- sqrt(mse_rf_roll_pred)
+rmse_rf_roll_pred
+
+
+
+
+
+#----- 6.4. Voir la variabilité des prédicitons -----
+
+# Paramètres
+
+nb_simulation <- 100
+liste_pred_rf_roll_pred <- list()
+
+# Boucle sur les simulations
+
+for (i in 1:nb_simulation) {
+  
+  set.seed(100 + i)
+  
+  # Réinitialiser les données d'entraînement
+  data_train_roll_sim <- data_train[(155 - fenetre + 1):155, ]
+  
+  # Pour stocker les prédictions de cette simulation
+  pred_sim <- data.frame()
+  
+  # Rolling sur les 12 mois
+  for (j in 1:12) {
+    
+    data_test_roll <- data_test[j, , drop = FALSE]
+    
+    # Modèle
+    model_rf_roll_sim <- randomForest(infl_energie ~ . - date, 
+                                      data = data_train_roll_sim)
+    
+    # Prédiction
+    pred_j <- predict(model_rf_roll_sim, newdata = data_test_roll)
+    
+    # Stocker la prédiction
+    pred_sim <- rbind(pred_sim, data.frame(
+      date = data_test_roll$date,
+      pred = pred_j,
+      iteration = paste0("RF_roll_", i)
+    ))
+    
+    # Mise à jour de la fenêtre AVEC la valeur PRÉDITE
+    new_row <- data_test_roll
+    new_row$infl_energie <- pred_j
+    
+    data_train_roll_sim <- rbind(data_train_roll_sim, new_row)
+    
+    if (nrow(data_train_roll_sim) > fenetre) {
+      data_train_roll_sim <- tail(data_train_roll_sim, fenetre)
+    }
+    
+    # Progression
+    if (j != 12) {
+      print(paste0(i - 1, ".", sprintf("%02d", floor(100 / 12 * j)), " %"))
+    } else {
+      print(paste0(i, ".00 %"))
+    }
+  }
+  
+  # Ajouter les 12 prédictions de cette simulation à la liste
+  liste_pred_rf_roll_pred[[i]] <- pred_sim
+}
+
+# Fusionner dans un seul data frame
+
+pred_rf_roll_pred_multi <- bind_rows(liste_pred_rf_roll_pred)
+
+# Représenter les simulations, la seed 123 et les valeurs réelles sur un seul graphique
+
+plot_result_var("rf_roll_pred", "Random Forest Rolling Window avec valeurs prédites")
+
 
 
 
@@ -720,14 +982,7 @@ print(result_lm)
 
 # Graphique
 
-ggplot(result_lm, aes(x = date)) +
-  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1) +
-  geom_line(aes(y = infl_predite, color = "Prédictions LM"), size = 1, linetype = "dashed") +
-  scale_color_manual(values = c("Inflation réelle" = "blue", "Prédictions LM" = "red")) +
-  labs(title = "Comparaison des valeurs réelles et prédites (modèle linéaire)", 
-       x = "Date", y = "Inflation", color = "Légende") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+plot_result(result_lm, "Régréssion Linéaire Multiple")
 
 
 
@@ -869,18 +1124,7 @@ print(result_forecast)
 
 #----- 8.6. Visualiser les résultats ----------
 
-
-ggplot(result_forecast, aes(x = date)) +
-  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1) +
-  geom_line(aes(y = infl_predite, color = "Prédictions ARIMA"), size = 1, linetype = "dashed") +
-  scale_color_manual(values = c("Inflation réelle" = "blue", 
-                                "Prédictions ARIMA" = "red")) +
-  labs(title = "Comparaison des valeurs réelles et prédites de l'inflation", 
-       x = "Date", 
-       y = "Inflation", 
-       color = "Légende") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+plot_result(result_forecast, "ARIMA")
 
 
 
@@ -902,3 +1146,256 @@ rmse_arima
 
 
 
+
+
+
+
+
+
+#----- 9. COMPARER LES RÉSULTATS  ----------
+
+#----- 9.1. Comparer directement -----
+
+#----- 9.1.1. Comparer les valeurs brutes ---
+
+# Numérique
+
+results <- data.frame(
+  date = data_test$date,
+  infl_reelle = data_test$infl_energie,
+  infl_predite_rf_class = pred_rf_class,
+  infl_predite_rf_pond = pred_rf_pond,
+  infl_predite_rw_reel = result_rf_roll_reel$infl_predite,
+  infl_predite_rw_pred = result_rf_roll_pred$infl_predite,
+  infl_predite_lm = pred_lm,
+  infl_predite_arima = forecast_arima$mean
+)
+
+results
+
+
+# Graphique
+
+ggplot(results, aes(x = date)) +
+  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1) +
+  geom_line(aes(y = infl_predite_rf_class, color = "Prédictions RF Classique"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_rf_pond, color = "Prédictions RF Pondéré"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_rw_reel, color = "Prédictions RF RW réel"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_rw_pred, color = "Prédictions RF RW pred"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_lm, color = "Prédictions Rég multiple"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_arima, color = "Prédictions ARIMA"), size = 1, linetype = "dashed") +
+  scale_color_manual(values = c("Inflation réelle" = "blue",
+                                "Prédictions RF Classique" = "green",
+                                "Prédictions RF Pondéré" = "darkgreen",
+                                "Prédictions RF RW réel" = "red",
+                                "Prédictions RF RW pred" = "darkred",
+                                "Prédictions Rég multiple" = "purple",
+                                "Prédictions ARIMA" = "pink")) +
+  labs(title = "Comparaison des valeurs réelles et prédites de l'inflation", 
+       x = "Date", 
+       y = "Inflation", 
+       color = "Légende") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+#----- 9.1.2. Comparer avec le RMSE ---
+
+rmse <- data.frame(
+  rf_class = rmse_rf_class,
+  rf_pond = rmse_rf_pond,
+  rw_reel = rmse_rf_roll_reel,
+  rw_pred = rmse_rf_roll_pred,
+  lm = rmse_lm,
+  arima = rmse_arima
+)
+
+rmse
+
+
+
+#----- 9.1.3. Tester avec Diebold Mariano ---
+
+# Liste de toutes les erreurs des modèles
+
+erreurs_models <- list(
+  rf_class = results$infl_reelle - results$infl_predite_rf_class,
+  rf_pond = results$infl_reelle - results$infl_predite_rf_pond,
+  rw_reel = results$infl_reelle - results$infl_predite_rw_reel,
+  rw_pred = results$infl_reelle - results$infl_predite_rw_pred,
+  lm = results$infl_reelle - results$infl_predite_lm,
+  arima = results$infl_reelle - results$infl_predite_arima
+)
+
+
+# Comparaison des paires de modèles
+
+comparaison <- combn(names(erreurs_models), 2, simplify = FALSE)
+
+
+# Test de Diebold-Mariano entre chaque paire de modèles
+
+test_dw <- lapply(comparaison, function(models) {
+  model1 <- models[1]
+  model2 <- models[2]
+  test_dm <- dm.test(erreurs_models[[model1]], erreurs_models[[model2]], alternative = "two.sided")
+  return(c(model1 = model1, model2 = model2, DM_statistic = test_dm$statistic, p_value = test_dm$p.value))
+})
+
+
+# Résultats sous forme de data frame
+
+results_test_dw <- do.call(rbind, test_dw)
+results_test_dw <- as.data.frame(results_test_dw)
+
+
+# Afficher les résultats
+
+print(results_test_dw)
+
+
+
+#----- 9.1.3. Tester avec DTW ---
+
+# Liste des séries prédites
+
+series_modeles <- list(
+  rf_class = results$infl_predite_rf_class,
+  rf_pond = results$infl_predite_rf_pond,
+  rw_reel = results$infl_predite_rw_reel,
+  rw_pred = results$infl_predite_rw_pred,
+  lm = results$infl_predite_lm,
+  arima = results$infl_predite_arima
+)
+
+
+# Référence : la série réelle
+
+series_reelle <- results$infl_reelle
+
+
+# Comparer les DTW distances entre la série réelle et chaque prédiction
+
+dtw_distances <- lapply(names(series_modeles), function(model_name) {
+  distance <- dtw(series_reelle, series_modeles[[model_name]], distance.only = TRUE)$distance
+  return(c(model = model_name, dtw_distance = distance))
+})
+
+
+# Convertir en data frame
+
+dtw_distances_df <- do.call(rbind, dtw_distances)
+dtw_distances_df <- as.data.frame(dtw_distances_df)
+
+
+# Convertir la colonne distance en numérique
+
+dtw_distances_df$dtw_distance <- as.numeric(dtw_distances_df$dtw_distance)
+
+
+# Afficher
+
+print(dtw_distances_df)
+
+
+
+
+
+#----- 9.2. Comparer après normalisation -----
+
+#----- 9.2.1. Normaliser les séries ---
+
+normaliser <- function(x) {
+  (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)
+}
+
+results_norm <- results
+results_norm$infl_reelle <- normaliser(results$infl_reelle)
+results_norm$infl_predite_rf_class <- normaliser(results$infl_predite_rf_class)
+results_norm$infl_predite_rf_pond <- normaliser(results$infl_predite_rf_pond)
+results_norm$infl_predite_rw_reel <- normaliser(results$infl_predite_rw_reel)
+results_norm$infl_predite_rw_pred <- normaliser(results$infl_predite_rw_pred)
+results_norm$infl_predite_lm <- normaliser(results$infl_predite_lm)
+results_norm$infl_predite_arima <- normaliser(results$infl_predite_arima)
+
+
+
+#----- 9.2.2. Représenter après la normalisation ---
+
+ggplot(results_norm, aes(x = date)) +
+  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1) +
+  geom_line(aes(y = infl_predite_rf_class, color = "Prédictions RF Classique"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_rf_pond, color = "Prédictions RF Pondéré"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_rw_reel, color = "Prédictions RF RW réel"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_rw_pred, color = "Prédictions RF RW pred"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_lm, color = "Prédictions Rég multiple"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_arima, color = "Prédictions ARIMA"), size = 1, linetype = "dashed") +
+  scale_color_manual(values = c("Inflation réelle" = "blue",
+                                "Prédictions RF Classique" = "green",
+                                "Prédictions RF Pondéré" = "darkgreen",
+                                "Prédictions RF RW réel" = "red",
+                                "Prédictions RF RW pred" = "darkred",
+                                "Prédictions Rég multiple" = "purple",
+                                "Prédictions ARIMA" = "pink")) +
+  labs(title = "Comparaison des valeurs réelles et prédites de l'inflation", 
+       x = "Date", 
+       y = "Inflation", 
+       color = "Légende") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+#----- 9.2.3. Évaluer les corrélations ---
+
+correlations <- data.frame(
+  modèle = c("RF class", "RF pondérée", "RW réel", "RW prédit", "Régression linéaire", "ARIMA"),
+  correlation_spearman = c(
+    cor(results$infl_reelle, results$infl_predite_rf_class, method = "spearman", use = "complete.obs"),
+    cor(results$infl_reelle, results$infl_predite_rf_pond, method = "spearman", use = "complete.obs"),
+    cor(results$infl_reelle, results$infl_predite_rw_reel, method = "spearman", use = "complete.obs"),
+    cor(results$infl_reelle, results$infl_predite_rw_pred, method = "spearman", use = "complete.obs"),
+    cor(results$infl_reelle, results$infl_predite_lm, method = "spearman", use = "complete.obs"),
+    cor(results$infl_reelle, results$infl_predite_arima, method = "spearman", use = "complete.obs")
+  )
+)
+
+print(correlations)
+
+
+
+#----- 9.2.4. Tester avec DTW ---
+
+# Normaliser la série réelle
+
+series_reelle_norm <- normaliser(series_reelle)
+
+
+# Normaliser toutes les séries prédites
+
+series_models_norm <- lapply(series_modeles, normaliser)
+
+
+# Calculer les distances DTW normalisées
+
+dtw_distances_norm <- lapply(names(series_models_norm), function(model_name) {
+  distance <- dtw(series_reelle_norm, series_models_norm[[model_name]], distance.only = TRUE)$distance
+  return(c(model = model_name, dtw_distance = distance))
+})
+
+
+# Convertir en data frame
+
+dtw_distances_norm_df <- do.call(rbind, dtw_distances_norm)
+dtw_distances_norm_df <- as.data.frame(dtw_distances_norm_df)
+
+
+# Convertir la colonne distance en numérique
+
+dtw_distances_norm_df$dtw_distance <- as.numeric(dtw_distances_norm_df$dtw_distance)
+
+
+# Affichage
+
+print(dtw_distances_norm_df)
