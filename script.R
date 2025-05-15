@@ -14,6 +14,7 @@ library(psych)
 library(patchwork)
 library(dtw)
 library(dplyr)
+library(tsoutliers)
 
 
 
@@ -24,20 +25,20 @@ data <- read_excel("data/donnees.xlsx")
 
 noms <- c("date",
           "ipc_energie",
-          "tx_eurdoll",
           "c_charbon",
           "c_brent",
           "c_gaz",
           "c_uranium",
           "ipi",
-          "co2",
-          "temperature",
-          "saison",
           "cons_elec",
           "prod_elec_nuc",
           "prod_elec_fos",
           "prod_elec_enr",
-          "ipc_transport")
+          "tx_dolleuro",
+          "ipc_transport",
+          "co2",
+          "temperature",
+          "saison")
 
 names(data) <- noms
 
@@ -74,8 +75,8 @@ names(data_infl)[names(data_infl) == "ipc_energie"] <- "infl_energie"
 
 #----- 1.5. Séparer train (2010-2022) et test (2023)
 
-data_train <- data_infl[1:155,] # [2010-2022]
-data_test <- data_infl[156:167,] # 2023
+data_train <- data_infl[1:156,] # [2010-2022]
+data_test <- data_infl[157:168,] # 2023
 
 
 
@@ -193,7 +194,7 @@ stat_graph(data_test, "data_test")
 # Calculer la matrice
 
 corr_matrix <- data_infl[ , !(names(data_infl) %in% c("date", "saison"))] |> 
-  cor(, use = "complete.obs")
+  cor(method = "spearman", use = "complete.obs")
 
 
 # Représenter
@@ -201,7 +202,7 @@ corr_matrix <- data_infl[ , !(names(data_infl) %in% c("date", "saison"))] |>
 corrplot(corr_matrix, 
          method = "circle",
          type = "upper",
-         col = colorRampPalette(c("red", "white", "blue"))(200),
+         col = colorRampPalette(c("blue", "white", "red"))(200),
          tl.col = "black",
          tl.srt = 45,
          addCoef.col = "black",
@@ -503,7 +504,7 @@ rmse_rf_pond
 
 
 
-#----- 4.4. Voir la variabilité des prédicitons -----
+#----- 4.4. Voir la variabilité des prédictions -----
 
 # Paramètres
 
@@ -552,11 +553,11 @@ plot_result_var("rf_pond", "Random Forest Pondéré")
 
 #----- 5.1. Définir les paramètres -----
 
-fenetre <- 155  # Taille de la fenêtre (2010-2022)
+fenetre <- 156  # Taille de la fenêtre (2010-2022)
 
 result_rf_roll_reel <- data.frame(date = NULL, infl_reelle = NULL, infl_predite = NULL)
 
-data_train_roll <- data_train[(155 - fenetre + 1):155, ]
+data_train_roll <- data_train[(156 - fenetre + 1):156, ]
 
 
 
@@ -642,7 +643,7 @@ rmse_rf_roll_reel
 
 
 
-#----- 5.5. Voir la variabilité des prédicitons -----
+#----- 5.5. Voir la variabilité des prédictions -----
 
 # Paramètres
 
@@ -657,7 +658,7 @@ for (i in 1:nb_simulation) {
   set.seed(100 + i)
   
   # Réinitialiser les données d'entraînement
-  data_train_roll_sim <- data_train[(155 - fenetre + 1):155, ]
+  data_train_roll_sim <- data_train[(156 - fenetre + 1):156, ]
   
   # Pour stocker les prédictions de cette simulation
   pred_sim <- data.frame()
@@ -688,9 +689,8 @@ for (i in 1:nb_simulation) {
       data_train_roll_sim <- tail(data_train_roll_sim, fenetre)
     }
     
-    # Progression 2
-    if (j != 12) {print(paste0(i-1, ".", sprintf("%02d", floor(100/12*j)), " %"))}
-    else {print(paste0(i, ".00 %"))}
+    # Progression
+    print(sprintf("%.2f %%", 100 * (i - 1 + j / 12) / nb_simulation))
   }
   
   # Ajouter les 12 prédictions de cette simulation à la liste
@@ -738,11 +738,11 @@ plot_result_var("rf_roll_reel", "Random Forest Rolling Window avec valeurs réel
 
 #----- 6.1. Définir les paramètres -----
 
-fenetre <- 130  # Taille de la fenêtre (2010-2022)
+fenetre <- 100  # Taille de la fenêtre (2010-2022)
 
 result_rf_roll_pred <- data.frame(date = NULL, infl_reelle = NULL, infl_predite = NULL)
 
-data_train_roll <- data_train[(155 - fenetre + 1):155, ]
+data_train_roll <- data_train[(156 - fenetre + 1):156, ]
 
 
 
@@ -836,6 +836,7 @@ rmse_rf_roll_pred
 nb_simulation <- 100
 liste_pred_rf_roll_pred <- list()
 
+
 # Boucle sur les simulations
 
 for (i in 1:nb_simulation) {
@@ -843,7 +844,7 @@ for (i in 1:nb_simulation) {
   set.seed(100 + i)
   
   # Réinitialiser les données d'entraînement
-  data_train_roll_sim <- data_train[(155 - fenetre + 1):155, ]
+  data_train_roll_sim <- data_train[(156 - fenetre + 1):156, ]
   
   # Pour stocker les prédictions de cette simulation
   pred_sim <- data.frame()
@@ -878,11 +879,7 @@ for (i in 1:nb_simulation) {
     }
     
     # Progression
-    if (j != 12) {
-      print(paste0(i - 1, ".", sprintf("%02d", floor(100 / 12 * j)), " %"))
-    } else {
-      print(paste0(i, ".00 %"))
-    }
+    print(sprintf("%.2f %%", 100 * (i - 1 + j / 12) / nb_simulation))
   }
   
   # Ajouter les 12 prédictions de cette simulation à la liste
@@ -961,9 +958,9 @@ summary(model_lm)
 
 #----- 7.3. Prédire avec le modèle -----
 
-pred_lm <- predict(model_lm, newdata = data_test)
-
-
+pred_conf_80 <- predict(model_lm, newdata = data_test, interval = "confidence", level = 0.80)
+pred_conf_90 <- predict(model_lm, newdata = data_test, interval = "confidence", level = 0.90)
+pred_conf_95 <- predict(model_lm, newdata = data_test, interval = "confidence", level = 0.95)
 
 
 
@@ -974,10 +971,17 @@ pred_lm <- predict(model_lm, newdata = data_test)
 result_lm <- data.frame(
   date = data_test$date,
   infl_reelle = data_test$infl_energie,
-  infl_predite = pred_lm
+  infl_predite = pred_conf_80[,1],
+  low_80 = pred_conf_80[,2],
+  up_80 = pred_conf_80[,3],
+  low_90 = pred_conf_90[,2],
+  up_90 = pred_conf_90[,3],
+  low_95 = pred_conf_95[,2],
+  up_95 = pred_conf_95[,3]
 )
 
 print(result_lm)
+
 
 
 # Graphique
@@ -1005,6 +1009,46 @@ rmse_lm
 
 
 
+#----- 7.6. Voir la variabilité des prédicitons -----
+
+ggplot(result_lm, aes(x = date)) +
+  # Intervalle de confiance à 95 %
+  geom_ribbon(aes(ymin = low_95, ymax = up_95, fill = "IC 95 %"), alpha = 0.2) +
+  
+  # Intervalle de confiance à 90 %
+  geom_ribbon(aes(ymin = low_90, ymax = up_90, fill = "IC 90 %"), alpha = 0.4) +
+  
+  # Intervalle de confiance à 80 %
+  geom_ribbon(aes(ymin = low_80, ymax = up_80, fill = "IC 80 %"), alpha = 0.6) +
+  
+  # Ligne de prévision
+  geom_line(aes(y = infl_predite, color = "Prévision LM"), size = 1.2) +
+  
+  # Ligne réelle
+  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1.2) +
+  
+  # Couleurs manuelles
+  scale_color_manual(values = c(
+    "Prévision LM" = "red",
+    "Inflation réelle" = "blue"
+  )) +
+  
+  # Couleurs des IC
+  scale_fill_manual(values = c(
+    "IC 95 %" = "#ffb8b8",
+    "IC 90 %" = "#ffb8b8",
+    "IC 80 %" = "#ffb8b8"
+  )) +
+  
+  labs(
+    title = "Prévision de l'inflation énergétique avec une Régression Linéaire Multiple",
+    subtitle = "Avec intervalles de confiance à 80 %, 90 % et 95 %",
+    x = "Date", y = "Inflation (%)",
+    color = "Courbes",
+    fill = "Intervalle de confiance"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 
 
@@ -1017,9 +1061,9 @@ rmse_lm
 
 #----- 8. MÉTHODE 6 : FORECAST  ----------
 
-#----- 7.1. Convertir les données en série temporelle -----
+#----- 8.1. Convertir les données en série temporelle -----
 
-data_train_ts <- ts(data_train$infl_energie, start = c(2010, 01), frequency = 12)
+data_train_ts <- ts(data_train$infl_energie, start = c(2010, 02), frequency = 12)
 
 
 
@@ -1099,7 +1143,7 @@ summary(model_arima)
 
 # Prédictions pour les 12 prochains mois avec ARIMA
 
-forecast_arima <- forecast(model_arima, h = 12)
+forecast_arima <- forecast(model_arima, h = 12, level = c(80, 90, 95))
 
 
 
@@ -1110,7 +1154,13 @@ forecast_arima <- forecast(model_arima, h = 12)
 result_forecast <- data.frame(
   date = data_test$date,
   infl_reelle = data_test$infl_energie,
-  infl_predite = forecast_arima$mean
+  infl_predite = forecast_arima$mean,
+  low_80 = forecast_arima$lower[,1],
+  up_80 = forecast_arima$upper[,1],
+  low_90 = forecast_arima$lower[,2],
+  up_90 = forecast_arima$upper[,2],
+  low_95 = forecast_arima$lower[,3],
+  up_95 = forecast_arima$upper[,3]
 )
 
 
@@ -1145,6 +1195,49 @@ rmse_arima
 
 
 
+#----- 8.8. Voir la variabilité des prédicitons -----
+
+ggplot(result_forecast, aes(x = date)) +
+  # Intervalle de confiance à 95 %
+  geom_ribbon(aes(ymin = low_95, ymax = up_95, fill = "IC 95 %"), alpha = 0.2) +
+  
+  # Intervalle de confiance à 90 %
+  geom_ribbon(aes(ymin = low_90, ymax = up_90, fill = "IC 90 %"), alpha = 0.4) +
+  
+  # Intervalle de confiance à 80 %
+  geom_ribbon(aes(ymin = low_80, ymax = up_80, fill = "IC 80 %"), alpha = 0.6) +
+  
+  # Ligne de prévision
+  geom_line(aes(y = infl_predite, color = "Prévision ARIMA"), size = 1.2) +
+  
+  # Ligne réelle
+  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1.2) +
+  
+  # Couleurs manuelles
+  scale_color_manual(values = c(
+    "Prévision ARIMA" = "red",
+    "Inflation réelle" = "blue"
+  )) +
+  
+  # Couleurs des IC
+  scale_fill_manual(values = c(
+    "IC 95 %" = "#ffb8b8",
+    "IC 90 %" = "#ffb8b8",
+    "IC 80 %" = "#ffb8b8"
+  )) +
+  
+  labs(
+    title = "Prévision de l'inflation énergétique avec ARIMA",
+    subtitle = "Avec intervalles de confiance à 80 %, 90 % et 95 %",
+    x = "Date", y = "Inflation (%)",
+    color = "Courbes",
+    fill = "Intervalle de confiance"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
 
 
 
@@ -1167,7 +1260,7 @@ results <- data.frame(
   infl_predite_rf_pond = pred_rf_pond,
   infl_predite_rw_reel = result_rf_roll_reel$infl_predite,
   infl_predite_rw_pred = result_rf_roll_pred$infl_predite,
-  infl_predite_lm = pred_lm,
+  infl_predite_lm = result_lm$infl_predite,
   infl_predite_arima = forecast_arima$mean
 )
 
@@ -1182,14 +1275,14 @@ ggplot(results, aes(x = date)) +
   geom_line(aes(y = infl_predite_rf_pond, color = "Prédictions RF Pondéré"), size = 1, linetype = "dashed") +
   geom_line(aes(y = infl_predite_rw_reel, color = "Prédictions RF RW réel"), size = 1, linetype = "dashed") +
   geom_line(aes(y = infl_predite_rw_pred, color = "Prédictions RF RW pred"), size = 1, linetype = "dashed") +
-  geom_line(aes(y = infl_predite_lm, color = "Prédictions Rég multiple"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_lm, color = "Prédictions LM"), size = 1, linetype = "dashed") +
   geom_line(aes(y = infl_predite_arima, color = "Prédictions ARIMA"), size = 1, linetype = "dashed") +
   scale_color_manual(values = c("Inflation réelle" = "blue",
                                 "Prédictions RF Classique" = "green",
                                 "Prédictions RF Pondéré" = "darkgreen",
                                 "Prédictions RF RW réel" = "red",
                                 "Prédictions RF RW pred" = "darkred",
-                                "Prédictions Rég multiple" = "purple",
+                                "Prédictions LM" = "purple",
                                 "Prédictions ARIMA" = "pink")) +
   labs(title = "Comparaison des valeurs réelles et prédites de l'inflation", 
        x = "Date", 
@@ -1329,14 +1422,14 @@ ggplot(results_norm, aes(x = date)) +
   geom_line(aes(y = infl_predite_rf_pond, color = "Prédictions RF Pondéré"), size = 1, linetype = "dashed") +
   geom_line(aes(y = infl_predite_rw_reel, color = "Prédictions RF RW réel"), size = 1, linetype = "dashed") +
   geom_line(aes(y = infl_predite_rw_pred, color = "Prédictions RF RW pred"), size = 1, linetype = "dashed") +
-  geom_line(aes(y = infl_predite_lm, color = "Prédictions Rég multiple"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_lm, color = "Prédictions LM"), size = 1, linetype = "dashed") +
   geom_line(aes(y = infl_predite_arima, color = "Prédictions ARIMA"), size = 1, linetype = "dashed") +
   scale_color_manual(values = c("Inflation réelle" = "blue",
                                 "Prédictions RF Classique" = "green",
                                 "Prédictions RF Pondéré" = "darkgreen",
                                 "Prédictions RF RW réel" = "red",
                                 "Prédictions RF RW pred" = "darkred",
-                                "Prédictions Rég multiple" = "purple",
+                                "Prédictions LM" = "purple",
                                 "Prédictions ARIMA" = "pink")) +
   labs(title = "Comparaison des valeurs réelles et prédites de l'inflation", 
        x = "Date", 
