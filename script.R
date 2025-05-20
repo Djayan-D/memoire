@@ -237,7 +237,9 @@ plot_violin_horizontal <- function(data, dataset_name = "Dataset") {
   }
 }
 
-
+plot_violin_horizontal(data_infl, "data_infl")
+plot_violin_horizontal(data_train, "data_train")
+plot_violin_horizontal(data_test, "data_test")
 
 
 
@@ -324,16 +326,63 @@ plot_result(result_rf_class, "Random Forest Classique")
 
 #----- 3.3. Évaluer le modèle -----
 
-# Calculer l'erreur quadratique moyenne
+#----- FONCTION 2 : Calculer les statistiques de qualité du modèle -----
 
-mse_rf_class <- mean((result_rf_class$infl_predite - result_rf_class$infl_reelle)^2)
-mse_rf_class
+stats_methode <- function(diminutif_methode, prefixe = "result") {
+  result_methode <- get(paste0(prefixe, "_", diminutif_methode))
+  
+  y_reel <- result_methode$infl_reelle
+  y_pred <- result_methode$infl_predite
+  
+  # RMSE
+  rmse <- sqrt(mean((y_pred - y_reel)^2))
+  
+  # MAE
+  mae <- mean(abs(y_pred - y_reel))
+  
+  # Correlation (Spearman)
+  correlation <- cor(y_pred, y_reel, method = "spearman")
+  
+  # DTW
+  dtw <- dtw(y_pred, y_reel)$distance
+  
+  # R²
+  ss_res <- sum((y_reel - y_pred)^2)
+  ss_tot <- sum((y_reel - mean(y_reel))^2)
+  r_squared <- 1 - (ss_res / ss_tot)
+  
+  # Biais
+  biais <- mean(y_pred - y_reel)
+  
+  # sMAPE (Symmetric Mean Absolute Percentage Error)
+  smape <- mean(2 * abs(y_pred - y_reel) / (abs(y_reel) + abs(y_pred))) * 100
+  
+  # MAS (Mean Absolute Scaled Error)
+  naive_pred_annee <- data_infl$infl_energie[156] # valeur de Décembre 2022 (dernière valeur avant prédiction)
+  naive_mae_annee <- mean(abs(naive_pred_annee - y_reel))
+  mase_annee <- mae / naive_mae_annee
+  
+  naive_pred_mois <- data_infl$infl_energie[156:167] # valeurs de Décembre 2022 à Novembre 2023, décalage de 1 car prend la valeur précédente
+  naive_mae_mois <- mean(abs(naive_pred_mois - y_reel))
+  mase_mois <- mae / naive_mae_mois
+  
+  return(c(RMSE = rmse,
+           MAE = mae,
+           Corr = correlation,
+           DTW = dtw,
+           R2 = r_squared,
+           Biais = biais,
+           sMAPE = smape,
+           MASE_annee = mase_annee,
+           MASE_mois = mase_mois))
+}
+
+#----- FIN FONCTION 2 -----
+
+stats_rf_class <- stats_methode("rf_class")
+stats_rf_class
 
 
-# Calculer le RMSE
-
-rmse_rf_class <- sqrt(mse_rf_class)
-rmse_rf_class
 
 
 
@@ -341,7 +390,7 @@ rmse_rf_class
 
 # Paramètres
 
-nb_simulation <- 100
+nb_simulation <- 10
 liste_pred_rf_class <- list()
 
 
@@ -367,7 +416,7 @@ pred_rf_class_multi <- bind_rows(liste_pred_rf_class)
 
 # Représenter les simulation, la seed 123 et les valeurs réelles sur une seul graphique
 
-#----- FONCTION 2 : Voir la variabilité des prédictions -----
+#----- FONCTION 3 : Voir la variabilité des prédictions -----
 
 plot_result_var <- function(diminutif_methode, nom_methode = diminutif_methode) {
   
@@ -410,7 +459,7 @@ plot_result_var <- function(diminutif_methode, nom_methode = diminutif_methode) 
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 }
 
-#----- FIN FONCTION 2 -----
+#----- FIN FONCTION 3 -----
 
 plot_result_var("rf_class", "Random Forest Classique")
 
@@ -430,7 +479,7 @@ plot_result_var("rf_class", "Random Forest Classique")
 
 #----- 4.1.1. Définir les poids ---
 
-poids <- exp(-(as.numeric(data_train$date) - max(as.numeric(data_train$date))) / 365)  # Exponentiellement dégressif
+poids <- exp(-(as.numeric(data_train$date) - max(as.numeric(data_train$date))))  # Exponentiellement dégressif
 
 
 
@@ -490,17 +539,10 @@ plot_result(result_rf_pond, "Random Forest Pondéré")
 
 #----- 4.3. Évaluer le modèle ----------
 
-# Calculer l'erreur quadratique moyenne
-
-mse_rf_pond <- mean((result_rf_pond$infl_predite - result_rf_pond$infl_reelle)^2)
-mse_rf_pond
+stats_rf_pond <- stats_methode("rf_pond")
+stats_rf_pond
 
 
-
-# Calculer le RMSE
-
-rmse_rf_pond <- sqrt(mse_rf_pond)
-rmse_rf_pond
 
 
 
@@ -508,7 +550,7 @@ rmse_rf_pond
 
 # Paramètres
 
-nb_simulation <- 100
+nb_simulation <- 10
 liste_pred_rf_pond <- list()
 
 
@@ -628,16 +670,8 @@ plot_result(result_rf_roll_reel, "Random Forest Rolling Window avec valeurs rée
 
 #----- 5.4. Évaluer le modèle ----------
 
-# Calculer l'erreur quadratique moyenne
-
-mse_rf_roll_reel <- mean((result_rf_roll_reel$infl_predite - result_rf_roll_reel$infl_reelle)^2)
-mse_rf_roll_reel
-
-
-# Calculer le RMSE
-
-rmse_rf_roll_reel <- sqrt(mse_rf_roll_reel)
-rmse_rf_roll_reel
+stats_rf_roll_reel <- stats_methode("rf_roll_reel")
+stats_rf_roll_reel
 
 
 
@@ -647,7 +681,7 @@ rmse_rf_roll_reel
 
 # Paramètres
 
-nb_simulation <- 100
+nb_simulation <- 10
 liste_pred_rf_roll_reel <- list()
 
 
@@ -814,16 +848,8 @@ plot_result(result_rf_roll_pred, "Random Forest Rolling Window avec valeurs pré
 
 #----- 6.4. Évaluer le modèle ----------
 
-# Calculer l'erreur quadratique moyenne
-
-mse_rf_roll_pred <- mean((result_rf_roll_pred$infl_predite - result_rf_roll_pred$infl_reelle)^2)
-mse_rf_roll_pred
-
-
-# Calculer le RMSE
-
-rmse_rf_roll_pred <- sqrt(mse_rf_roll_pred)
-rmse_rf_roll_pred
+stats_rf_roll_pred <- stats_methode("rf_roll_pred")
+stats_rf_roll_pred
 
 
 
@@ -833,7 +859,7 @@ rmse_rf_roll_pred
 
 # Paramètres
 
-nb_simulation <- 100
+nb_simulation <- 10
 liste_pred_rf_roll_pred <- list()
 
 
@@ -994,16 +1020,8 @@ plot_result(result_lm, "Régréssion Linéaire Multiple")
 
 #----- 7.5. Évaluer le modèle ----------
 
-# Calculer l'erreur quadratique moyenne
-
-mse_lm <- mean((result_lm$infl_predite - result_lm$infl_reelle)^2)
-mse_lm
-
-
-# Calculer le RMSE
-
-rmse_lm <- sqrt(mse_lm)
-rmse_lm
+stats_lm <- stats_methode("lm")
+stats_lm
 
 
 
@@ -1151,7 +1169,7 @@ forecast_arima <- forecast(model_arima, h = 12, level = c(80, 90, 95))
 
 # Comparer les valeurs réelles et les prévisions
 
-result_forecast <- data.frame(
+result_arima <- data.frame(
   date = data_test$date,
   infl_reelle = data_test$infl_energie,
   infl_predite = forecast_arima$mean,
@@ -1166,7 +1184,7 @@ result_forecast <- data.frame(
 
 # Affichage des résultats
 
-print(result_forecast)
+print(result_arima)
 
 
 
@@ -1174,7 +1192,7 @@ print(result_forecast)
 
 #----- 8.6. Visualiser les résultats ----------
 
-plot_result(result_forecast, "ARIMA")
+plot_result(result_arima, "ARIMA")
 
 
 
@@ -1182,22 +1200,14 @@ plot_result(result_forecast, "ARIMA")
 
 #----- 8.7. Évaluer les modèles ----------
 
-# Calculer l'erreur quadratique moyenne
-
-mse_arima <- mean((result_forecast$infl_predite - result_forecast$infl_reelle)^2)
-mse_arima
-
-
-# Calculer le RMSE
-
-rmse_arima <- sqrt(mse_arima)
-rmse_arima
+stats_arima <- stats_methode("arima")
+stats_arima
 
 
 
 #----- 8.8. Voir la variabilité des prédicitons -----
 
-ggplot(result_forecast, aes(x = date)) +
+ggplot(result_arima, aes(x = date)) +
   # Intervalle de confiance à 95 %
   geom_ribbon(aes(ymin = low_95, ymax = up_95, fill = "IC 95 %"), alpha = 0.2) +
   
@@ -1293,18 +1303,18 @@ ggplot(results, aes(x = date)) +
 
 
 
-#----- 9.1.2. Comparer avec le RMSE ---
+#----- 9.1.2. Comparer avec les statistiques ---
 
-rmse <- data.frame(
-  rf_class = rmse_rf_class,
-  rf_pond = rmse_rf_pond,
-  rw_reel = rmse_rf_roll_reel,
-  rw_pred = rmse_rf_roll_pred,
-  lm = rmse_lm,
-  arima = rmse_arima
+stats_df <- rbind(
+  rf_class = stats_rf_class,
+  rf_pond = stats_rf_pond,
+  rf_roll_pred = stats_rf_roll_pred,
+  rf_roll_reel = stats_rf_roll_reel,
+  lm = stats_lm,
+  arima = stats_arima
 )
 
-rmse
+stats_df
 
 
 
@@ -1349,50 +1359,6 @@ print(results_test_dw)
 
 
 
-#----- 9.1.3. Tester avec DTW ---
-
-# Liste des séries prédites
-
-series_modeles <- list(
-  rf_class = results$infl_predite_rf_class,
-  rf_pond = results$infl_predite_rf_pond,
-  rw_reel = results$infl_predite_rw_reel,
-  rw_pred = results$infl_predite_rw_pred,
-  lm = results$infl_predite_lm,
-  arima = results$infl_predite_arima
-)
-
-
-# Référence : la série réelle
-
-series_reelle <- results$infl_reelle
-
-
-# Comparer les DTW distances entre la série réelle et chaque prédiction
-
-dtw_distances <- lapply(names(series_modeles), function(model_name) {
-  distance <- dtw(series_reelle, series_modeles[[model_name]], distance.only = TRUE)$distance
-  return(c(model = model_name, dtw_distance = distance))
-})
-
-
-# Convertir en data frame
-
-dtw_distances_df <- do.call(rbind, dtw_distances)
-dtw_distances_df <- as.data.frame(dtw_distances_df)
-
-
-# Convertir la colonne distance en numérique
-
-dtw_distances_df$dtw_distance <- as.numeric(dtw_distances_df$dtw_distance)
-
-
-# Afficher
-
-print(dtw_distances_df)
-
-
-
 
 
 #----- 9.2. Comparer après normalisation -----
@@ -1403,14 +1369,28 @@ normaliser <- function(x) {
   (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)
 }
 
+methodes <- c("rf_class", "rf_pond", "rw_reel", "rw_pred", "lm", "arima")
+
+# Copier les données originales dans results_norm pour garder toutes les colonnes sauf infl_predite*
 results_norm <- results
 results_norm$infl_reelle <- normaliser(results$infl_reelle)
-results_norm$infl_predite_rf_class <- normaliser(results$infl_predite_rf_class)
-results_norm$infl_predite_rf_pond <- normaliser(results$infl_predite_rf_pond)
-results_norm$infl_predite_rw_reel <- normaliser(results$infl_predite_rw_reel)
-results_norm$infl_predite_rw_pred <- normaliser(results$infl_predite_rw_pred)
-results_norm$infl_predite_lm <- normaliser(results$infl_predite_lm)
-results_norm$infl_predite_arima <- normaliser(results$infl_predite_arima)
+
+for (m in methodes) {
+  # Créer chaque dataframe results_norm_m avec infl_reelle et infl_predite normalisés
+  temp <- results[, c("infl_reelle", paste0("infl_predite_", m))]
+  temp$infl_reelle <- normaliser(temp$infl_reelle)
+  temp[[paste0("infl_predite_", m)]] <- normaliser(temp[[paste0("infl_predite_", m)]])
+  # Renommer la colonne infl_predite spécifique en "infl_predite" pour faciliter le traitement
+  colnames(temp)[2] <- "infl_predite"
+  assign(paste0("results_norm_", m), temp)
+  
+  # Ajouter dans results_norm la colonne normalisée infl_predite correspondante
+  results_norm[[paste0("infl_predite_", m)]] <- temp$infl_predite
+}
+
+
+
+
 
 
 
@@ -1440,55 +1420,10 @@ ggplot(results_norm, aes(x = date)) +
 
 
 
-#----- 9.2.3. Évaluer les corrélations ---
-
-correlations <- data.frame(
-  modèle = c("RF class", "RF pondérée", "RW réel", "RW prédit", "Régression linéaire", "ARIMA"),
-  correlation_spearman = c(
-    cor(results$infl_reelle, results$infl_predite_rf_class, method = "spearman", use = "complete.obs"),
-    cor(results$infl_reelle, results$infl_predite_rf_pond, method = "spearman", use = "complete.obs"),
-    cor(results$infl_reelle, results$infl_predite_rw_reel, method = "spearman", use = "complete.obs"),
-    cor(results$infl_reelle, results$infl_predite_rw_pred, method = "spearman", use = "complete.obs"),
-    cor(results$infl_reelle, results$infl_predite_lm, method = "spearman", use = "complete.obs"),
-    cor(results$infl_reelle, results$infl_predite_arima, method = "spearman", use = "complete.obs")
-  )
-)
-
-print(correlations)
 
 
 
-#----- 9.2.4. Tester avec DTW ---
+#----- 9.2.3. Comparer avec les statistiques ---
 
-# Normaliser la série réelle
+stats_methode("rf_class", "results_norm")
 
-series_reelle_norm <- normaliser(series_reelle)
-
-
-# Normaliser toutes les séries prédites
-
-series_models_norm <- lapply(series_modeles, normaliser)
-
-
-# Calculer les distances DTW normalisées
-
-dtw_distances_norm <- lapply(names(series_models_norm), function(model_name) {
-  distance <- dtw(series_reelle_norm, series_models_norm[[model_name]], distance.only = TRUE)$distance
-  return(c(model = model_name, dtw_distance = distance))
-})
-
-
-# Convertir en data frame
-
-dtw_distances_norm_df <- do.call(rbind, dtw_distances_norm)
-dtw_distances_norm_df <- as.data.frame(dtw_distances_norm_df)
-
-
-# Convertir la colonne distance en numérique
-
-dtw_distances_norm_df$dtw_distance <- as.numeric(dtw_distances_norm_df$dtw_distance)
-
-
-# Affichage
-
-print(dtw_distances_norm_df)
