@@ -1280,20 +1280,20 @@ results
 # Graphique
 
 ggplot(results, aes(x = date)) +
-  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1) +
-  geom_line(aes(y = infl_predite_rf_class, color = "Prédictions RF Classique"), size = 1, linetype = "dashed") +
-  geom_line(aes(y = infl_predite_rf_pond, color = "Prédictions RF Pondéré"), size = 1, linetype = "dashed") +
-  geom_line(aes(y = infl_predite_rw_reel, color = "Prédictions RF RW réel"), size = 1, linetype = "dashed") +
-  geom_line(aes(y = infl_predite_rw_pred, color = "Prédictions RF RW pred"), size = 1, linetype = "dashed") +
-  geom_line(aes(y = infl_predite_lm, color = "Prédictions LM"), size = 1, linetype = "dashed") +
-  geom_line(aes(y = infl_predite_arima, color = "Prédictions ARIMA"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1.2) +
+  geom_line(aes(y = infl_predite_rf_class, color = "Prédictions RF Classique"), size = 1.2, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_rf_pond, color = "Prédictions RF Pondéré"), size = 1.2, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_rw_reel, color = "Prédictions RF RW réel"), size = 1.2, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_rw_pred, color = "Prédictions RF RW pred"), size = 1.2, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_lm, color = "Prédictions LM"), size = 1.2, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_arima, color = "Prédictions ARIMA"), size = 1.2, linetype = "dashed") +
   scale_color_manual(values = c("Inflation réelle" = "blue",
-                                "Prédictions RF Classique" = "green",
-                                "Prédictions RF Pondéré" = "darkgreen",
-                                "Prédictions RF RW réel" = "red",
-                                "Prédictions RF RW pred" = "darkred",
-                                "Prédictions LM" = "purple",
-                                "Prédictions ARIMA" = "pink")) +
+                                "Prédictions RF Classique" = "#bdffbd",
+                                "Prédictions RF Pondéré" = "#09ff09",
+                                "Prédictions RF RW réel" = "#ffa6a6",
+                                "Prédictions RF RW pred" = "#ff0909",
+                                "Prédictions LM" = "#ffbdfb",
+                                "Prédictions ARIMA" = "#f915eb")) +
   labs(title = "Comparaison des valeurs réelles et prédites de l'inflation", 
        x = "Date", 
        y = "Inflation", 
@@ -1369,9 +1369,10 @@ normaliser <- function(x) {
   (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)
 }
 
-methodes <- c("rf_class", "rf_pond", "rw_reel", "rw_pred", "lm", "arima")
 
-# Copier les données originales dans results_norm pour garder toutes les colonnes sauf infl_predite*
+# Créer des df de la bonne forme pour utiliser stats_methode et un df complet (results_norm)
+
+methodes <- c("rf_class", "rf_pond", "rw_reel", "rw_pred", "lm", "arima")
 results_norm <- results
 results_norm$infl_reelle <- normaliser(results$infl_reelle)
 
@@ -1397,20 +1398,20 @@ for (m in methodes) {
 #----- 9.2.2. Représenter après la normalisation ---
 
 ggplot(results_norm, aes(x = date)) +
-  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1) +
-  geom_line(aes(y = infl_predite_rf_class, color = "Prédictions RF Classique"), size = 1, linetype = "dashed") +
-  geom_line(aes(y = infl_predite_rf_pond, color = "Prédictions RF Pondéré"), size = 1, linetype = "dashed") +
-  geom_line(aes(y = infl_predite_rw_reel, color = "Prédictions RF RW réel"), size = 1, linetype = "dashed") +
-  geom_line(aes(y = infl_predite_rw_pred, color = "Prédictions RF RW pred"), size = 1, linetype = "dashed") +
-  geom_line(aes(y = infl_predite_lm, color = "Prédictions LM"), size = 1, linetype = "dashed") +
-  geom_line(aes(y = infl_predite_arima, color = "Prédictions ARIMA"), size = 1, linetype = "dashed") +
+  geom_line(aes(y = infl_reelle, color = "Inflation réelle"), size = 1.2) +
+  geom_line(aes(y = infl_predite_rf_class, color = "Prédictions RF Classique"), size = 1.2, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_rf_pond, color = "Prédictions RF Pondéré"), size = 1.2, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_rw_reel, color = "Prédictions RF RW réel"), size = 1.2, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_rw_pred, color = "Prédictions RF RW pred"), size = 1.2, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_lm, color = "Prédictions LM"), size = 1.2, linetype = "dashed") +
+  geom_line(aes(y = infl_predite_arima, color = "Prédictions ARIMA"), size = 1.2, linetype = "dashed") +
   scale_color_manual(values = c("Inflation réelle" = "blue",
-                                "Prédictions RF Classique" = "green",
-                                "Prédictions RF Pondéré" = "darkgreen",
-                                "Prédictions RF RW réel" = "red",
-                                "Prédictions RF RW pred" = "darkred",
-                                "Prédictions LM" = "purple",
-                                "Prédictions ARIMA" = "pink")) +
+                                "Prédictions RF Classique" = "#bdffbd",
+                                "Prédictions RF Pondéré" = "#09ff09",
+                                "Prédictions RF RW réel" = "#ffa6a6",
+                                "Prédictions RF RW pred" = "#ff0909",
+                                "Prédictions LM" = "#ffbdfb",
+                                "Prédictions ARIMA" = "#f915eb")) +
   labs(title = "Comparaison des valeurs réelles et prédites de l'inflation", 
        x = "Date", 
        y = "Inflation", 
@@ -1425,5 +1426,19 @@ ggplot(results_norm, aes(x = date)) +
 
 #----- 9.2.3. Comparer avec les statistiques ---
 
-stats_methode("rf_class", "results_norm")
+stats_df_norm <- rbind(
+  rf_class = stats_methode("rf_class", "results_norm"),
+  rf_pond = stats_methode("rf_pond", "results_norm"),
+  rf_roll_pred = stats_methode("rw_reel", "results_norm"),
+  rf_roll_reel = stats_methode("rw_pred", "results_norm"),
+  lm = stats_methode("lm", "results_norm"),
+  arima = stats_methode("arima", "results_norm")
+)
+
+stats_df_norm
+
+
+
+
+
 
