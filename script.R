@@ -1288,8 +1288,8 @@ ggplot(results, aes(x = date)) +
   geom_line(aes(y = infl_predite_lm, color = "Prédictions LM"), size = 1.2, linetype = "dashed") +
   geom_line(aes(y = infl_predite_arima, color = "Prédictions ARIMA"), size = 1.2, linetype = "dashed") +
   scale_color_manual(values = c("Inflation réelle" = "blue",
-                                "Prédictions RF Classique" = "#bdffbd",
-                                "Prédictions RF Pondéré" = "#09ff09",
+                                "Prédictions RF Classique" = "#92ff92",
+                                "Prédictions RF Pondéré" = "#23d923",
                                 "Prédictions RF RW réel" = "#ffa6a6",
                                 "Prédictions RF RW pred" = "#ff0909",
                                 "Prédictions LM" = "#ffbdfb",
@@ -1406,13 +1406,13 @@ ggplot(results_norm, aes(x = date)) +
   geom_line(aes(y = infl_predite_lm, color = "Prédictions LM"), size = 1.2, linetype = "dashed") +
   geom_line(aes(y = infl_predite_arima, color = "Prédictions ARIMA"), size = 1.2, linetype = "dashed") +
   scale_color_manual(values = c("Inflation réelle" = "blue",
-                                "Prédictions RF Classique" = "#bdffbd",
-                                "Prédictions RF Pondéré" = "#09ff09",
+                                "Prédictions RF Classique" = "#92ff92",
+                                "Prédictions RF Pondéré" = "#23d923",
                                 "Prédictions RF RW réel" = "#ffa6a6",
                                 "Prédictions RF RW pred" = "#ff0909",
                                 "Prédictions LM" = "#ffbdfb",
                                 "Prédictions ARIMA" = "#f915eb")) +
-  labs(title = "Comparaison des valeurs réelles et prédites de l'inflation", 
+  labs(title = "Comparaison des valeurs réelles et prédites de l'inflation après normalisation", 
        x = "Date", 
        y = "Inflation", 
        color = "Légende") +
