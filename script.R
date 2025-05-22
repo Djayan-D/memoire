@@ -61,22 +61,42 @@ str(data)
 
 #----- 1.4. Transformer en différence première -----
 
-data_infl <- data
+data_infl <- cbind(
+  date = data$date[-1],
+  infl_energie = diff(log(data$ipc_energie))*100,
+  data[-nrow(data), !(names(data) %in% c("date", "ipc_energie"))]
+)
 
-data_infl$ipc_energie <- c(NA, diff(data_infl$ipc_energie))
-
-data_infl <- data_infl[-1, ]  # retirer la première ligne devenue NA
-
-names(data_infl)[names(data_infl) == "ipc_energie"] <- "infl_energie"
-
-
+## Strcture :
+## 1ère colonne : Date
+## 2ème colonne : Inflation correspondant à la Date
+## 3ème-16ème colonne : Variables du mois d'avant
+##
+## Objectif : 
+## Permettre sur une même ligne l'inflation à prévoir et les données (valeurs 
+## des variables) utilisées pour cela
+##
+## Exemple :
+## Je suis à la ligne 1
+##   - La date est "Février 2010"
+##   - infl_energie → inflation de février 2010 (= entre fin janvier 2010 et fin 
+##     février 2010 avec l'IPC-énergie)
+##   - c_charbon est le cours du charbon en janvier 2010
+##   - c_brent est le cours du pétrole en janvier 2010
+##   ...
+##
+## Remarque :
+## Il n'y a pas janvier 2010 car sinon cela supposerait d'avoir les valeurs des
+## variables en décembre 2009. De la même façon, même si on ne le voit pas, les
+## valeurs des variables en décembre 2023 ne sont pas utilisées et on été 
+## retirées) car sinon cela reviendrait à prédire janvier 2024.
 
 
 
 #----- 1.5. Séparer train (2010-2022) et test (2023)
 
-data_train <- data_infl[1:156,] # [2010-2022]
-data_test <- data_infl[157:168,] # 2023
+data_train <- data_infl[1:155,] # [2010-2022]
+data_test <- data_infl[156:167,] # 2023
 
 
 
@@ -595,11 +615,11 @@ plot_result_var("rf_pond", "Random Forest Pondéré")
 
 #----- 5.1. Définir les paramètres -----
 
-fenetre <- 156  # Taille de la fenêtre (2010-2022)
+fenetre <- 155  # Taille de la fenêtre (2010-2022)
 
 result_rf_roll_reel <- data.frame(date = NULL, infl_reelle = NULL, infl_predite = NULL)
 
-data_train_roll <- data_train[(156 - fenetre + 1):156, ]
+data_train_roll <- data_train[(155 - fenetre + 1):155, ]
 
 
 
@@ -692,7 +712,7 @@ for (i in 1:nb_simulation) {
   set.seed(100 + i)
   
   # Réinitialiser les données d'entraînement
-  data_train_roll_sim <- data_train[(156 - fenetre + 1):156, ]
+  data_train_roll_sim <- data_train[(155 - fenetre + 1):155, ]
   
   # Pour stocker les prédictions de cette simulation
   pred_sim <- data.frame()
@@ -750,24 +770,6 @@ plot_result_var("rf_roll_reel", "Random Forest Rolling Window avec valeurs réel
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #----- 6. MÉTHODE 4 : RANDOM FOREST "ROLLING WINDOW valeurs prédites" ----------
 
 #----- 6.1. Définir les paramètres -----
@@ -776,7 +778,7 @@ fenetre <- 100  # Taille de la fenêtre (2010-2022)
 
 result_rf_roll_pred <- data.frame(date = NULL, infl_reelle = NULL, infl_predite = NULL)
 
-data_train_roll <- data_train[(156 - fenetre + 1):156, ]
+data_train_roll <- data_train[(155 - fenetre + 1):155, ]
 
 
 
@@ -870,7 +872,7 @@ for (i in 1:nb_simulation) {
   set.seed(100 + i)
   
   # Réinitialiser les données d'entraînement
-  data_train_roll_sim <- data_train[(156 - fenetre + 1):156, ]
+  data_train_roll_sim <- data_train[(155 - fenetre + 1):155, ]
   
   # Pour stocker les prédictions de cette simulation
   pred_sim <- data.frame()
@@ -1089,7 +1091,7 @@ data_train_ts <- ts(data_train$infl_energie, start = c(2010, 02), frequency = 12
 
 #----- 8.2. Retirer les outliers -----
 
-# Recherche et correction 1 : 5 outliers
+# Recherche et correction 1 : 4 outliers
 
 ts_outliers_1 <- tso(data_train_ts, maxit.iloop = 20)
 ts_outliers_1
@@ -1099,7 +1101,7 @@ plot(ts_outliers_1)
 data_train_ts_corr_1 <- ts_outliers_1$yadj
 
 
-# Recherche et correction 2 : 4 outliers
+# Recherche et correction 2 : 2 outliers
 
 ts_outliers_2 <- tso(data_train_ts_corr_1, maxit.iloop = 20)
 ts_outliers_2
@@ -1118,9 +1120,21 @@ plot(ts_outliers_3)
 data_train_ts_corr_3 <- ts_outliers_3$yadj
 
 
-# Recherche 4 : 0 outlier
+# Recherche 4 : 1 outlier
 
-tso(data_train_ts_corr_3, maxit.iloop = 20)
+ts_outliers_4 <- tso(data_train_ts_corr_3, maxit.iloop = 20)
+ts_outliers_4
+
+plot(ts_outliers_4)
+
+data_train_ts_corr_4 <- ts_outliers_4$yadj
+
+
+# Recherche 5 : 0 outlier
+
+tso(data_train_ts_corr_4, maxit.iloop = 20)
+
+
 
 
 
@@ -1128,12 +1142,12 @@ tso(data_train_ts_corr_3, maxit.iloop = 20)
 
 # Test Dickey-Fuller
 
-adf.test(data_train_ts_corr_3)  # p-value < 0.01 -> on rejette H0, la série est stationnaire
+adf.test(data_train_ts_corr_4)  # p-value < 0.01 -> on rejette H0, la série est stationnaire
 
 
 # Test KPSS
 
-kpss.test(data_train_ts_corr_3) # p-value > 0.1 -> on accepte H0, la série est stationnaire
+kpss.test(data_train_ts_corr_4) # p-value > 0.1 -> on accepte H0, la série est stationnaire
 
 
 
@@ -1144,7 +1158,7 @@ kpss.test(data_train_ts_corr_3) # p-value > 0.1 -> on accepte H0, la série est 
 
 # Entraîner le modèle ARIMA
 
-model_arima <- auto.arima(data_train_ts_corr_3)
+model_arima <- auto.arima(data_train_ts_corr_4, stepwise = FALSE, approximation = FALSE)
 
 
 # Résumé du modèle ARIMA
