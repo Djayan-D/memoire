@@ -34,7 +34,7 @@ noms <- c("date",
           "prod_elec_nuc",
           "prod_elec_fos",
           "prod_elec_enr",
-          "tx_dolleuro",
+          "tx_eurodoll",
           "ipc_transport",
           "co2",
           "temperature",
@@ -101,6 +101,35 @@ data_test <- data_infl[156:167,] # 2023
 
 
 
+#----- 1.6 Visualiser les séries
+
+plot_all_vars <- function(data, title_prefix = "Évolution de") {
+
+  vars <- names(data)[-c(1,16)]
+  
+  for (var in vars) {
+    p <- ggplot(data, aes(x = date, y = .data[[var]])) +
+      geom_line(color = "#0072B2", size = 1.2) +
+      labs(title = paste(title_prefix, var),
+           x = "Date",
+           y = var) +
+      theme_minimal(base_size = 14) +
+      theme(
+        plot.title = element_text(face = "bold", hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.grid.minor = element_blank()
+      )
+    
+    print(p)
+  }
+}
+
+
+# Appliquer aux trois datasets
+
+plot_all_vars(data_infl, title_prefix = "Inflation -")
+plot_all_vars(data_train, title_prefix = "Train -")
+plot_all_vars(data_test, title_prefix = "Test -")
 
 
 
@@ -378,11 +407,11 @@ stats_methode <- function(diminutif_methode, prefixe = "result") {
   smape <- mean(2 * abs(y_pred - y_reel) / (abs(y_reel) + abs(y_pred))) * 100
   
   # MAS (Mean Absolute Scaled Error)
-  naive_pred_annee <- data_infl$infl_energie[156] # valeur de Décembre 2022 (dernière valeur avant prédiction)
+  naive_pred_annee <- data_infl$infl_energie[155] # valeur de Décembre 2022 (dernière valeur avant prédiction)
   naive_mae_annee <- mean(abs(naive_pred_annee - y_reel))
   mase_annee <- mae / naive_mae_annee
   
-  naive_pred_mois <- data_infl$infl_energie[156:167] # valeurs de Décembre 2022 à Novembre 2023, décalage de 1 car prend la valeur précédente
+  naive_pred_mois <- data_infl$infl_energie[155:166] # valeurs de Décembre 2022 à Novembre 2023, décalage de 1 car prend la valeur précédente
   naive_mae_mois <- mean(abs(naive_pred_mois - y_reel))
   mase_mois <- mae / naive_mae_mois
   
@@ -410,7 +439,7 @@ stats_rf_class
 
 # Paramètres
 
-nb_simulation <- 10
+nb_simulation <- 1000
 liste_pred_rf_class <- list()
 
 
@@ -426,6 +455,10 @@ for (i in 1:nb_simulation) {
     pred = pred,
     iteration = paste0("RF_", i)
   )
+  
+  # Progression
+  print(sprintf("%.2f %%", 100 * (i - 1 + j / 12) / nb_simulation))
+  
 }
 
 
@@ -476,7 +509,8 @@ plot_result_var <- function(diminutif_methode, nom_methode = diminutif_methode) 
       color = "Légende"
     ) +
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "bottom")
 }
 
 #----- FIN FONCTION 3 -----
@@ -570,7 +604,7 @@ stats_rf_pond
 
 # Paramètres
 
-nb_simulation <- 10
+nb_simulation <- 1000
 liste_pred_rf_pond <- list()
 
 
@@ -590,6 +624,9 @@ for (i in 1:nb_simulation) {
     pred = pred,
     iteration = paste0("RF_pond_", i)
   )
+  
+  # Progression
+  print(sprintf("%.2f %%", 100 * (i - 1 + j / 12) / nb_simulation))
 }
 
 
@@ -701,7 +738,7 @@ stats_rf_roll_reel
 
 # Paramètres
 
-nb_simulation <- 10
+nb_simulation <- 1000
 liste_pred_rf_roll_reel <- list()
 
 
@@ -861,7 +898,7 @@ stats_rf_roll_pred
 
 # Paramètres
 
-nb_simulation <- 10
+nb_simulation <- 1000
 liste_pred_rf_roll_pred <- list()
 
 
