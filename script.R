@@ -457,7 +457,7 @@ for (i in 1:nb_simulation) {
   )
   
   # Progression
-  print(sprintf("%.2f %%", 100 * (i - 1 + j / 12) / nb_simulation))
+  print(sprintf("%.2f %%", 100 * (i - 1 + i / 12) / nb_simulation))
   
 }
 
@@ -626,7 +626,7 @@ for (i in 1:nb_simulation) {
   )
   
   # Progression
-  print(sprintf("%.2f %%", 100 * (i - 1 + j / 12) / nb_simulation))
+  print(sprintf("%.2f %%", 100 * (i - 1 + i / 12) / nb_simulation))
 }
 
 
