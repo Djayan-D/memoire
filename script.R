@@ -88,8 +88,13 @@ data_infl <- cbind(
 ## Remarque :
 ## Il n'y a pas janvier 2010 car sinon cela supposerait d'avoir les valeurs des
 ## variables en décembre 2009. De la même façon, même si on ne le voit pas, les
-## valeurs des variables en décembre 2023 ne sont pas utilisées et on été 
+## valeurs des variables en décembre 2023 ne sont pas utilisées et ont été 
 ## retirées) car sinon cela reviendrait à prédire janvier 2024.
+##
+## Résumé :
+## À la date t, c'est l'inflation à t mais les variables à t-1
+
+
 
 
 
@@ -97,6 +102,7 @@ data_infl <- cbind(
 
 data_train <- data_infl[1:155,] # [2010-2022]
 data_test <- data_infl[156:167,] # 2023
+
 
 
 
@@ -130,6 +136,10 @@ plot_all_vars <- function(data, title_prefix = "Évolution de") {
 plot_all_vars(data_infl, title_prefix = "Inflation -")
 plot_all_vars(data_train, title_prefix = "Train -")
 plot_all_vars(data_test, title_prefix = "Test -")
+
+
+
+
 
 
 
